@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, List, Dict, Optional
 
 import torch
 import numpy as np
+from paddleocr import TextDetection
 from PIL import Image
 from transformers import (
     PPDocLayoutV3ForObjectDetection,
@@ -33,19 +34,22 @@ class PPOCRLayoutDetector(BaseLayoutDetector):
         """
         super().__init__(config)
 
-        logger.debug("Initializing PP-OCRv5...")
+        logger.debug("Initializing PP-OCR layout detector...")
 
         self.model_dir = config.model_dir
         self.cuda_visible_devices = config.cuda_visible_devices
+        self.batch_size = config.batch_size
 
         self._model = None
-        self._device = None
 
     def start(self):
-        logger.debug(f"PP-OCRv5 loaded.")
+        model_name = self.model_dir.split("/")[-1]
+        self._model = TextDetection(model_name=model_name)
+        logger.debug(f"PP-OCR layout detector loaded (model = {model_name}).")
 
     def stop(self):
-        logger.debug("PP-OCRv5 stopped.")
+        self._model = None
+        logger.debug("PP-OCR layout detector stopped.")
 
     def process(
         self,
@@ -54,8 +58,65 @@ class PPOCRLayoutDetector(BaseLayoutDetector):
         visualization_output_dir: Optional[str] = None,
         global_start_idx: int = 0,
     ) -> List[List[Dict]]:
-        logger.debug("Processing with PP-OCRv5...")
+        logger.debug("Processing with PP-OCR layout detector...")
+
+        if self._model is None:
+            raise RuntimeError("Layout detector not started. Call start() first.")
+
+        image_batch = []
+        for image in images:
+            image_width, image_height = image.size
+            image_array = np.array(image.convert("RGB"))
+            image_batch.append((image_array, image_width, image_height))
+
+        paddle_results = []
+        num_images = len(images)
+        for chunk_start in range(0, num_images, self.batch_size):
+            chunk_end = min(chunk_start + self.batch_size, num_images)
+            image_arrays = [img[0] for img in image_batch[chunk_start:chunk_end]]
+            output = self._model.predict(input=image_arrays, batch_size=self.batch_size)
+            for result in output:
+                paddle_results.append(result.json["res"])
+
         all_results = []
+        for paddle_idx, paddle_result in enumerate(paddle_results):
+            result_len = len(paddle_result["dt_scores"])
+            image_width = image_batch[paddle_idx][1]
+            image_height = image_batch[paddle_idx][2]
+
+            results = []
+            for i in range(0, result_len):
+                score = float(paddle_result["dt_scores"][i])
+
+                poly_array = paddle_result["dt_polys"][i]
+                polygon = [
+                    [
+                        int(float(point[0]) / image_width * 1000),
+                        int(float(point[1]) / image_height * 1000)
+                    ]
+                    for point in poly_array
+                ]
+
+                x_values = [point[0] for point in polygon]
+                y_values = [point[1] for point in polygon]
+                bbox_2d = [
+                    min(x_values),
+                    min(y_values),
+                    max(x_values),
+                    max(y_values)
+                ]
+
+                results.append({
+                    "index": result_len - 1 - i, # paddle returns results in reversed order
+                    "label": "text",
+                    "score": score,
+                    "bbox_2d": bbox_2d,
+                    "polygon": polygon,
+                    "task_type": "text",
+                })
+
+            all_results.append(results)
+
         return all_results
 
 class PPDocLayoutDetector(BaseLayoutDetector):
