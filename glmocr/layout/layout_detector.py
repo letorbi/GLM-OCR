@@ -24,6 +24,39 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+class PPOCRLayoutDetector(BaseLayoutDetector):
+    def __init__(self, config: "LayoutConfig"):
+        """Initialize.
+
+        Args:
+            config: LayoutConfig instance.
+        """
+        super().__init__(config)
+
+        logger.debug("Initializing PP-OCRv5...")
+
+        self.model_dir = config.model_dir
+        self.cuda_visible_devices = config.cuda_visible_devices
+
+        self._model = None
+        self._device = None
+
+    def start(self):
+        logger.debug(f"PP-OCRv5 loaded.")
+
+    def stop(self):
+        logger.debug("PP-OCRv5 stopped.")
+
+    def process(
+        self,
+        images: List[Image.Image],
+        save_visualization: bool = False,
+        visualization_output_dir: Optional[str] = None,
+        global_start_idx: int = 0,
+    ) -> List[List[Dict]]:
+        logger.debug("Processing with PP-OCRv5...")
+        all_results = []
+        return all_results
 
 class PPDocLayoutDetector(BaseLayoutDetector):
     """PP-DocLayoutV3 layout detector.

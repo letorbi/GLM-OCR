@@ -11,6 +11,7 @@ Extension options:
 from __future__ import annotations
 
 import queue
+import re
 import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Any, Optional, Tuple, List, Generator
@@ -109,14 +110,24 @@ class Pipeline:
             if layout_detector is not None:
                 self.layout_detector = layout_detector
             else:
-                from glmocr.layout import PPDocLayoutDetector
+                if re.search("PP-OCRv5_(mobile|server)_det", config.layout.model_dir) is not None:
+                    from glmocr.layout import PPOCRLayoutDetector
 
-                if PPDocLayoutDetector is None:
-                    from glmocr.layout import _raise_layout_import_error
+                    if PPOCRLayoutDetector is None:
+                        from glmocr.layout import _raise_layout_import_error
 
-                    _raise_layout_import_error()
+                        _raise_layout_import_error()
 
-                self.layout_detector = PPDocLayoutDetector(config.layout)
+                    self.layout_detector = PPOCRLayoutDetector(config.layout)
+                else:
+                    from glmocr.layout import PPDocLayoutDetector
+
+                    if PPDocLayoutDetector is None:
+                        from glmocr.layout import _raise_layout_import_error
+
+                        _raise_layout_import_error()
+
+                    self.layout_detector = PPDocLayoutDetector(config.layout)
             self.max_workers = config.max_workers
         self._page_maxsize = getattr(config, "page_maxsize", 100)
         self._region_maxsize = getattr(config, "region_maxsize", 800)
