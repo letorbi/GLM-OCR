@@ -631,8 +631,11 @@ class Pipeline:
             batch_indices, batch_images, layout_results
         ):
             layout_results_dict[img_idx] = layout_result
+            i = 0
             for region in layout_result:
                 cropped = crop_image_region(image, region["bbox_2d"], region["polygon"])
+                cropped.save(f"./cropped-{img_idx}-{i}.png", cropped.info)
+
                 region_queue.put(
                     (
                         "region",
@@ -640,6 +643,7 @@ class Pipeline:
                         (cropped, region, region["task_type"], img_idx),
                     )
                 )
+                i += 1
 
     def _extract_image_urls(self, request_data: Dict[str, Any]) -> List[str]:
         """Extract image URLs from request_data."""

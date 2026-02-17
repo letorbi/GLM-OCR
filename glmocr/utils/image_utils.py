@@ -9,6 +9,8 @@ from io import BytesIO
 import numpy as np
 from PIL import Image, ImageDraw, ImagePath
 
+#import time
+
 
 def smart_resize(
     t: int,
@@ -204,6 +206,8 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
     if not polygon or len(polygon) < 3:
         return image.crop((x1, y1, x2, y2))
 
+    # New cropping code (about 2 to 70 times faster)
+    start_a = time.time()
     polygon_px = [
         (
             int(float(point[0]) * image_width / 1000) - x1,
@@ -216,7 +220,44 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
     back = Image.new(cropped.mode, cropped_size, 0xffffffff)
     mask = Image.new("L", cropped_size, 0x00)
     ImageDraw.Draw(mask).polygon(polygon_px, fill = 0xff, outline = 0xff)
-    return Image.composite(cropped, back, mask)
+    result = Image.composite(cropped, back, mask)
+    time_a = (time.time() - start_a) * 1000
+
+    # Old cropping code
+    start_b = time.time()
+    # Convert to numpy array once
+    img_array = np.asarray(image)
+
+    # Crop the bbox region
+    img_crop = img_array[y1:y2, x1:x2]
+    crop_height, crop_width = img_crop.shape[:2]
+
+    # Pre-compute polygon coordinates
+    scale_x = image_width / 1000
+    scale_y = image_height / 1000
+    polygon_pixels = np.empty((len(polygon), 2), dtype=np.int32)
+    for i, point in enumerate(polygon):
+        polygon_pixels[i, 0] = int(point[0] * scale_x) - x1
+        polygon_pixels[i, 1] = int(point[1] * scale_y) - y1
+
+    # Create mask
+    mask = np.zeros((crop_height, crop_width), dtype=np.uint8)
+    cv2.fillPoly(mask, [polygon_pixels], 1)
+
+    # Create output image with fill_color
+    if len(img_crop.shape) == 3:
+        output = np.full_like(img_crop, fill_color, dtype=np.uint8)
+    else:
+        output = np.full((crop_height, crop_width), fill_color, dtype=np.uint8)
+    cv2.copyTo(img_crop, mask, output)
+
+    # Convert back to PIL Image
+    result = Image.fromarray(output)
+
+    time_b = (time.time() - start_b) * 1000
+
+    print(f"A: {time_a}ms, B: {time_b}ms, d: {time_b/time_a}")
+    return result
 
 
 def image_tensor_to_base64(image_tensor, image_format):
