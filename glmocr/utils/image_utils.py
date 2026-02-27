@@ -221,7 +221,8 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
         (cropped.width, 0),
         (0, 0)
     ]
-    ImageDraw.Draw(cropped).polygon(polygon_mask, fill = 0xffffffff, outline = None)
+    fill = (fill_color << 24) + (fill_color << 16) + (fill_color << 8) + 0xff
+    ImageDraw.Draw(cropped).polygon(polygon_mask, fill, outline = None, width=0)
     return cropped
 
 def image_tensor_to_base64(image_tensor, image_format):
