@@ -204,20 +204,24 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
     if not polygon or len(polygon) < 3:
         return image.crop((x1, y1, x2, y2))
 
-    polygon_px = [
+    cropped = image.crop((x1, y1, x2, y2))
+    polygon_mask = [
         (
             int(float(point[0]) * image_width / 1000) - x1,
             int(float(point[1]) * image_height / 1000) - y1
         )
         for point in polygon
     ]
-    cropped = image.crop((x1, y1, x2, y2))
-    cropped_size = (cropped.width, cropped.height)
-    back = Image.new(cropped.mode, cropped_size, 0xffffffff)
-    mask = Image.new("L", cropped_size, 0x00)
-    ImageDraw.Draw(mask).polygon(polygon_px, fill = 0xff, outline = 0xff)
-    return Image.composite(cropped, back, mask)
-
+    polygon_mask += [
+        polygon_mask[0],
+        (0, 0),
+        (0, cropped.height),
+        (cropped.width, cropped.height),
+        (cropped.width, 0),
+        (0, 0)
+    ]
+    ImageDraw.Draw(cropped).polygon(polygon_mask, fill = 0xffffffff, outline = None)
+    return cropped
 
 def image_tensor_to_base64(image_tensor, image_format):
     """Convert a torch image tensor to base64.
