@@ -634,7 +634,6 @@ class Pipeline:
             i = 0
             for region in layout_result:
                 cropped = crop_image_region(image, region["bbox_2d"], region["polygon"])
-                cropped.save(f"./cropped-{img_idx}-{i}.png", cropped.info)
 
                 region_queue.put(
                     (

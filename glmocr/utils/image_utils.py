@@ -7,9 +7,12 @@ import math
 from io import BytesIO
 
 import numpy as np
-from PIL import Image, ImageDraw, ImagePath
+from PIL import Image, ImageColor, ImageDraw, ImagePath
 
-#import time
+import time
+time_ds = 0
+time_fs = 0
+time_c = 0
 
 
 def smart_resize(
@@ -178,7 +181,6 @@ def load_image_to_base64(
 
     return image_base64
 
-
 def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
     """Crop an image region using bbox and optionally mask outside polygon.
 
@@ -208,19 +210,25 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
 
     # New cropping code (about 2 to 70 times faster)
     start_a = time.time()
-    polygon_px = [
+    cropped = image.crop((x1, y1, x2, y2))
+    polygon_mask = [
         (
             int(float(point[0]) * image_width / 1000) - x1,
             int(float(point[1]) * image_height / 1000) - y1
         )
         for point in polygon
     ]
-    cropped = image.crop((x1, y1, x2, y2))
-    cropped_size = (cropped.width, cropped.height)
-    back = Image.new(cropped.mode, cropped_size, 0xffffffff)
-    mask = Image.new("L", cropped_size, 0x00)
-    ImageDraw.Draw(mask).polygon(polygon_px, fill = 0xff, outline = 0xff)
-    result = Image.composite(cropped, back, mask)
+    polygon_mask += [
+        polygon_mask[0],
+        (0, 0),
+        (0, cropped.height),
+        (cropped.width, cropped.height),
+        (cropped.width, 0),
+        (0, 0)
+    ]
+    fill = (fill_color << 24) + (fill_color << 16) + (fill_color << 8) + 0xff
+    ImageDraw.Draw(cropped).polygon(polygon_mask, fill, outline=None, width=0)
+    result_a = cropped
     time_a = (time.time() - start_a) * 1000
 
     # Old cropping code
@@ -252,12 +260,21 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
     cv2.copyTo(img_crop, mask, output)
 
     # Convert back to PIL Image
-    result = Image.fromarray(output)
-
+    result_b = Image.fromarray(output)
     time_b = (time.time() - start_b) * 1000
 
-    print(f"A: {time_a}ms, B: {time_b}ms, d: {time_b/time_a}")
-    return result
+    global time_fs, time_ds, time_c
+    time_d = time_b - time_a
+    time_f = time_b/time_a
+    time_ds += time_d
+    time_fs += time_f
+    time_c += 1
+
+    result_a.save(f"./cropped-img_{time_c}_a.png")
+    result_b.save(f"./cropped-img_{time_c}_b.png")
+
+    print(f"A: {time_a}ms, B: {time_b}ms\n  d: {time_d} d_avg: {time_ds/time_c}\n  f: {time_f} f_avg: {time_fs/time_c}")
+    return result_b
 
 
 def image_tensor_to_base64(image_tensor, image_format):
