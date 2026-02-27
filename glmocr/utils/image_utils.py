@@ -191,14 +191,15 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
     Returns:
         PIL.Image.Image: Cropped region with optional polygon mask applied
     """
-    image_width, image_height = image.size
+    scale_width = image.size[0] / 1000
+    scale_height = image.size[1] / 1000
 
     # De-normalize bbox to pixel coordinates
     x1_norm, y1_norm, x2_norm, y2_norm = bbox_2d
-    x1 = int(x1_norm * image_width / 1000)
-    y1 = int(y1_norm * image_height / 1000)
-    x2 = int(x2_norm * image_width / 1000)
-    y2 = int(y2_norm * image_height / 1000)
+    x1 = int(x1_norm * scale_width)
+    y1 = int(y1_norm * scale_height)
+    x2 = int(x2_norm * scale_width)
+    y2 = int(y2_norm * scale_height)
 
     # Simple bbox crop if polygon is invalid
     if not polygon or len(polygon) < 3:
@@ -207,8 +208,8 @@ def crop_image_region(image, bbox_2d, polygon=None, fill_color=255):
     cropped = image.crop((x1, y1, x2, y2))
     polygon_mask = [
         (
-            int(float(point[0]) * image_width / 1000) - x1,
-            int(float(point[1]) * image_height / 1000) - y1
+            int(float(point[0]) * scale_width) - x1,
+            int(float(point[1]) * scale_height) - y1
         )
         for point in polygon
     ]
